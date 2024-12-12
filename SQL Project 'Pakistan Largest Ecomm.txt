@@ -1,4 +1,4 @@
-SQL Project 'Pakistan Largest Ecommerce Data Analysis'
+SQL Project 'Data Analysis on Pakistan Largest Ecommerce Data'
 
 -- Retrieve all rows from the dataset.
 SELECT * FROM pakistan_largest_ecommerce_data;
