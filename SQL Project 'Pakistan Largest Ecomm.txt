@@ -1,0 +1,156 @@
+SQL Project 'Pakistan Largest Ecommerce Data Analysis'
+
+-- Retrieve all rows from the dataset.
+SELECT * FROM pakistan_largest_ecommerce_data;
+
+-- Count the total number of records.
+SELECT COUNT(*) FROM pakistan_largest_ecommerce_data;
+
+-- Rename column 'category_name_1' to 'category_name'.
+ALTER TABLE pakistan_largest_ecommerce_data
+RENAME COLUMN category_name_1 TO category_name;
+
+-- Update status to 'pending' for NULL or empty values.
+UPDATE pakistan_largest_ecommerce_data
+SET status = 'pending'
+WHERE status IS NULL OR status = '';
+
+-- 1. Retrieve item_id, price, and category_name for 'complete' COD orders.
+SELECT item_id, price, category_name
+FROM pakistan_largest_ecommerce_data
+WHERE status = 'Complete' AND payment_method = 'cod';
+
+-- 2. Find total orders and total revenue by category.
+SELECT category_name, COUNT(item_id) AS total_num_of_orders,
+       SUM(price * qty_ordered) AS total_revenue
+FROM pakistan_largest_ecommerce_data
+GROUP BY category_name;
+
+-- 3. Calculate total revenue for categories where revenue exceeds 10,000.
+SELECT category_name AS categories, 
+       SUM(price * qty_ordered) AS total_revenue
+FROM pakistan_largest_ecommerce_data
+GROUP BY category_name
+HAVING total_revenue > 10000
+ORDER BY total_revenue DESC;
+
+-- 4. Join with 'customers' table to fetch item_id, status, customer_name, and price for members before 2015.
+SELECT item_id, status, customer_name, price
+FROM pakistan_largest_ecommerce_data
+JOIN customers ON pakistan_largest_ecommerce_data.customer_id = customers.customer_id
+WHERE YEAR(customers.membership_date) < 2015;
+
+-- 5. Calculate cumulative total revenue for each item ordered by created_at.
+SELECT item_id,
+       SUM(price * qty_ordered) OVER (PARTITION BY item_id ORDER BY created_at ASC) AS cumulative_revenue
+FROM pakistan_largest_ecommerce_data;
+
+-- 6. Get monthly orders and revenue for 2016.
+SELECT MONTH(CAST(created_at AS DATE)) AS month_is,
+       ROUND(SUM(price * qty_ordered), 0) AS total_revenue
+FROM pakistan_largest_ecommerce_data
+WHERE YEAR(CAST(created_at AS DATE)) = 2016
+GROUP BY MONTH(CAST(created_at AS DATE))
+ORDER BY total_revenue DESC;
+
+-- 7. Categorize payments into High, Medium, and Low Value.
+SELECT *,
+       CASE
+           WHEN price > 5000 THEN 'High Value'
+           WHEN price BETWEEN 500 AND 5000 THEN 'Medium Value'
+           ELSE 'Low Value'
+       END AS payment_type_category
+FROM pakistan_largest_ecommerce_data;
+
+-- 8. Identify duplicate item_id and status combinations.
+WITH base_query AS (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY item_id, status) AS ranking
+    FROM pakistan_largest_ecommerce_data
+)
+SELECT * FROM base_query
+WHERE ranking > 1;
+
+-- 9. Return top 5 most expensive orders excluding canceled or refunded.
+SELECT * 
+FROM pakistan_largest_ecommerce_data
+WHERE status NOT IN ('canceled', 'order_refunded')
+ORDER BY price DESC
+LIMIT 5;
+
+-- 10. Find average price and qty for categories with avg price > 1000.
+SELECT category_name, 
+       ROUND(AVG(price), 2) AS average_price_per_order,
+       ROUND(AVG(qty_ordered), 2) AS average_qty_item_per_order
+FROM pakistan_largest_ecommerce_data
+GROUP BY category_name
+HAVING average_price_per_order > 1000
+ORDER BY average_price_per_order DESC;
+
+-- 11. Calculate total revenue from Q4 2016, excluding canceled orders.
+SELECT MONTH(CAST(created_at AS DATE)) AS Q4,
+       ROUND(SUM(price * qty_ordered), 0) AS total_revenue
+FROM pakistan_largest_ecommerce_data
+WHERE MONTH(CAST(created_at AS DATE)) IN (10, 11, 12)
+  AND YEAR(CAST(created_at AS DATE)) = 2016
+  AND status <> 'canceled'
+GROUP BY MONTH(CAST(created_at AS DATE));
+
+-- 12. Find price difference for each order from category average.
+SELECT category_name, 
+       AVG(price) OVER () - price AS difference
+FROM pakistan_largest_ecommerce_data
+GROUP BY category_name;
+
+-- 13. Extract year and month as YYYY-MM from created_at.
+WITH base_query AS (
+    SELECT YEAR(CAST(created_at AS DATE)) AS Year_in, 
+           MONTH(CAST(created_at AS DATE)) AS month_in,
+           item_id, status, price
+    FROM pakistan_largest_ecommerce_data
+)
+SELECT CONCAT(Year_in, '-', month_in) AS new_date_format, item_id, status, price
+FROM base_query;
+
+-- 14. Replace NULL or empty category_name with 'Unknown'.
+SELECT item_id, category_name, payment_method
+FROM pakistan_largest_ecommerce_data
+WHERE category_name IS NULL OR category_name = '';
+UPDATE pakistan_largest_ecommerce_data
+SET category_name = 'Unknown'
+WHERE category_name IS NULL OR category_name = '';
+
+-- 15. Get item_id and price for customers with more than 5 orders.
+WITH base_query AS (
+    SELECT customer_id, COUNT(item_id) AS number_of_orders
+    FROM pakistan_largest_ecommerce_data
+    GROUP BY customer_id
+    HAVING number_of_orders > 5
+)
+SELECT item_id, price, customer_id
+FROM pakistan_largest_ecommerce_data
+JOIN base_query ON pakistan_largest_ecommerce_data.customer_id = base_query.customer_id;
+
+-- 16. Find number of orders and total revenue for customers with > 5 orders.
+SELECT customer_id, COUNT(item_id) AS number_of_orders, 
+       SUM(price * qty_ordered) AS total_revenue
+FROM pakistan_largest_ecommerce_data
+GROUP BY customer_id
+HAVING number_of_orders > 5
+ORDER BY number_of_orders DESC;
+
+-- 17. Find max price for each category and its item_id.
+SELECT item_id, category_name, price
+FROM pakistan_largest_ecommerce_data
+WHERE (category_name, price) IN (
+    SELECT category_name, MAX(price)
+    FROM pakistan_largest_ecommerce_data
+    GROUP BY category_name
+);
+
+-- 18. Return the most recent order for each customer.
+SELECT created_at, customer_id, item_id, price
+FROM pakistan_largest_ecommerce_data
+WHERE created_at IN (
+    SELECT MAX(created_at)
+    FROM pakistan_largest_ecommerce_data
+);
